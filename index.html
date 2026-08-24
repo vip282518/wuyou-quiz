@@ -290,6 +290,16 @@ main{flex:1;min-width:0}
         <button class="action-btn ghost" id="btnImport">⬇ 导入进度</button>
       </div>
       <input type="file" id="importFile" accept=".json,application/json" style="display:none"/>
+      <div style="margin-top:10px;padding:11px;background:#f0f6ff;border:1px solid #cfe0ff;border-radius:11px">
+        <div style="font-weight:700;color:#1c4fb0;margin-bottom:8px;font-size:13px">☁️ 云端同步（GitHub）</div>
+        <input type="password" id="cloudPwd" placeholder="云端密码（加密用·请牢记）" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;border:1px solid #c9d6ea;border-radius:7px;font-size:13px"/>
+        <input type="password" id="cloudToken" placeholder="GitHub Token（仅存本机）" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:8px;border:1px solid #c9d6ea;border-radius:7px;font-size:13px"/>
+        <div style="display:flex;gap:8px">
+          <button class="action-btn ghost" id="btnCloudSave" style="flex:1">💾 保存</button>
+          <button class="action-btn ghost" id="btnCloudLoad" style="flex:1">📥 恢复</button>
+        </div>
+        <p class="side-hint" style="margin-top:8px">密码用于加密云端进度（忘记不可恢复）；Token 只存本机、不上传代码。进度写入公开仓库但为密文，他人不可读。</p>
+      </div>
       <p class="side-hint">💡 点选项作答，多选点提交；进度自动保存在本机。换设备/浏览器可「导出→导入」迁移进度。</p>
     </div>
     <div class="panel">
@@ -496,6 +506,88 @@ function deriveAcc(qd){
   return { right, total: keys.length };
 }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+// ---------- 云端同步：GitHub 仓库 + 客户端加密（AES-GCM） ----------
+// 进度写入公开仓库的加密文件，密钥由“云端密码”派生，仓库里只留密文，他人不可读。
+const CLOUD_REPO = 'vip282518/wuyou-quiz';
+const CLOUD_BRANCH = 'main';
+const _enc = new TextEncoder();
+const _dec = new TextDecoder();
+function _b64enc(bytes){ let bin=''; const u=new Uint8Array(bytes); for(let i=0;i<u.length;i++) bin+=String.fromCharCode(u[i]); return btoa(bin); }
+function _b64dec(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+async function _deriveKey(password, saltStr){
+  const km = await crypto.subtle.importKey('raw', _enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt:_enc.encode(saltStr), iterations:100000, hash:'SHA-256' },
+    km, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+}
+async function _encryptObj(obj, password, saltStr){
+  const key = await _deriveKey(password, saltStr);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, _enc.encode(JSON.stringify(obj)));
+  return { v:1, iv:_b64enc(iv), ct:_b64enc(ct) };
+}
+async function _decryptObj(payload, password, saltStr){
+  const key = await _deriveKey(password, saltStr);
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv:_b64dec(payload.iv) }, key, _b64dec(payload.ct));
+  return JSON.parse(_dec.decode(pt));
+}
+function _cloudPath(user){ return 'progress/' + encodeURIComponent(user) + '.json'; }
+async function saveToCloud(){
+  const pwd = document.getElementById('cloudPwd').value;
+  let token = (document.getElementById('cloudToken').value || '').trim();
+  if(!pwd){ toast('请输入云端密码'); return; }
+  if(!token){ token = localStorage.getItem('wuyou_gh_token') || ''; }
+  if(!token){ toast('请先填写 GitHub Token'); return; }
+  localStorage.setItem('wuyou_gh_token', token);
+  toast('⏳ 正在加密并保存…');
+  const snapshot = { quizDone:state.quizDone, favs:[...state.favs], wrongIdx:[...state.wrongIdx], acc:state.acc, lastIndex:state.lastIndex };
+  const enc = await _encryptObj(snapshot, pwd, state.user);
+  const content = _b64enc(_enc.encode(JSON.stringify(enc)));
+  const path = _cloudPath(state.user);
+  const api = 'https://api.github.com/repos/' + CLOUD_REPO + '/contents/' + path;
+  const headers = { Authorization:'Bearer '+token, 'Accept':'application/vnd.github+json' };
+  let sha;
+  try{ const r = await fetch(api, { headers }); if(r.ok){ const j = await r.json(); sha = j.sha; } }catch(e){}
+  const body = { message:'sync progress '+state.user+' '+new Date().toISOString(), content, branch: CLOUD_BRANCH };
+  if(sha) body.sha = sha;
+  try{
+    const res = await fetch(api, { method:'PUT', headers:{ ...headers, 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+    if(res.ok){ toast('☁️ 已保存到云端 ✓'); } else { toast('保存失败：HTTP '+res.status); }
+  }catch(e){ toast('保存出错：'+e.message); }
+}
+async function loadFromCloud(){
+  const pwd = document.getElementById('cloudPwd').value;
+  if(!pwd){ toast('请输入云端密码'); return; }
+  const path = _cloudPath(state.user);
+  const rawUrl = 'https://raw.githubusercontent.com/' + CLOUD_REPO + '/' + CLOUD_BRANCH + '/' + path + '?ts=' + Date.now();
+  const apiUrl = 'https://api.github.com/repos/' + CLOUD_REPO + '/contents/' + path;
+  toast('⏳ 正在从云端恢复…');
+  let payload = null;
+  // 优先 raw（无需 token，适合仅知道密码的只读恢复）；失败则回退到 API（实时、需 token）
+  try{ const r = await fetch(rawUrl, { cache:'no-store' }); if(r.ok){ payload = await r.json(); } }catch(e){}
+  if(!payload){
+    const token = (document.getElementById('cloudToken').value || '').trim() || localStorage.getItem('wuyou_gh_token') || '';
+    if(token){
+      try{
+        const r2 = await fetch(apiUrl, { headers:{ Authorization:'Bearer '+token, 'Accept':'application/vnd.github+json' } });
+        if(r2.ok){ const j = await r2.json(); payload = JSON.parse(_dec.decode(_b64dec(j.content))); }
+      }catch(e){}
+    }
+  }
+  if(!payload){ toast('云端暂无该用户进度'); return; }
+  try{
+    const data = await _decryptObj(payload, pwd, state.user);
+    state.quizDone = data.quizDone || {};
+    state.favs = new Set(data.favs || []);
+    state.wrongIdx = new Set(data.wrongIdx || []);
+    state.acc = data.acc || deriveAcc(state.quizDone);
+    state.lastIndex = (data.lastIndex != null) ? data.lastIndex : -1;
+    saveFavs(); saveQuiz(); saveWrongAcc(); saveLastIndex();
+    render(); updateStats();
+    toast('☁️ 已从云端恢复 ✓');
+  }catch(e){ toast('解密失败，密码是否正确？'); }
+}
 
 function qIndex(q){
   const ci = CH_ORDER.indexOf(q.category);
@@ -1255,6 +1347,9 @@ function importProgress(file){
   reader.readAsText(file);
 }
 document.getElementById('btnExport').onclick = exportProgress;
+document.getElementById('btnCloudSave').onclick = saveToCloud;
+document.getElementById('btnCloudLoad').onclick = loadFromCloud;
+document.getElementById('cloudToken').value = localStorage.getItem('wuyou_gh_token') || '';
 document.getElementById('btnImport').onclick = () => document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change', e => {
   if(e.target.files[0]) importProgress(e.target.files[0]);
