@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>无忧学堂 · 全题库学习（862 题）</title>
+<title>无忧学堂 · 全题库学习（854 题）</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -259,7 +259,7 @@ main{flex:1;min-width:0}
     <div class="brand-logo">无</div>
     <div>
       <h1>无忧学堂 · 全员知识题库</h1>
-      <p>JOY MEDIA LEARNING SPACE · 全 5 大知识库 862 题</p>
+      <p>JOY MEDIA LEARNING SPACE · 全 5 大知识库 854 题</p>
     </div>
   </div>
   <div class="search-box">
@@ -335,7 +335,7 @@ main{flex:1;min-width:0}
     <div class="mm-legend">
       <span class="lg"><span class="dot" style="background:#ff6b5e"></span>01 企业文化 98</span>
       <span class="lg"><span class="dot" style="background:#4a7dff"></span>02 公司规章 50</span>
-      <span class="lg"><span class="dot" style="background:#f5a623"></span>03 达人艺人 568</span>
+      <span class="lg"><span class="dot" style="background:#f5a623"></span>03 达人艺人 560</span>
       <span class="lg"><span class="dot" style="background:#17b890"></span>04 内容商业化 96</span>
       <span class="lg"><span class="dot" style="background:#8b5cf6"></span>05 平台须知 50</span>
     </div>
@@ -499,7 +499,8 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 
 function qIndex(q){
   const ci = CH_ORDER.indexOf(q.category);
-  const offset = {0:0,1:98,2:148,3:716,4:812}[ci];
+  let offset = 0;
+  for (let k = 0; k < ci; k++) offset += QUESTIONS.filter(x => x.category === CH_ORDER[k]).length;
   const within = QUESTIONS.filter(x=>x.category===q.category).indexOf(q);
   return offset + within + 1;
 }
