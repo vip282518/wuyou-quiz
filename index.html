@@ -293,12 +293,15 @@ main{flex:1;min-width:0}
       <div style="margin-top:10px;padding:11px;background:#f0f6ff;border:1px solid #cfe0ff;border-radius:11px">
         <div style="font-weight:700;color:#1c4fb0;margin-bottom:8px;font-size:13px">☁️ 云端同步（GitHub）</div>
         <input type="password" id="cloudPwd" placeholder="云端密码（加密用·请牢记）" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;border:1px solid #c9d6ea;border-radius:7px;font-size:13px"/>
-        <input type="password" id="cloudToken" placeholder="GitHub Token（仅存本机）" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:8px;border:1px solid #c9d6ea;border-radius:7px;font-size:13px"/>
+        <input type="password" id="cloudToken" placeholder="GitHub classic Token（ghp_开头，repo权限）" style="width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;border:1px solid #c9d6ea;border-radius:7px;font-size:13px"/>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="action-btn ghost" id="btnCloudCheck" style="flex:1">🔑 验证Token</button>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="action-btn ghost" id="btnCloudSave" style="flex:1">💾 保存</button>
           <button class="action-btn ghost" id="btnCloudLoad" style="flex:1">📥 恢复</button>
         </div>
-        <p class="side-hint" style="margin-top:8px">密码用于加密云端进度（忘记不可恢复）；Token 只存本机、不上传代码。进度写入公开仓库但为密文，他人不可读。</p>
+        <p class="side-hint" style="margin-top:8px">密码用于加密云端进度（忘记不可恢复）；Token 只存本机、不上传代码。进度写入公开仓库但为密文，他人不可读。提示「HTTP 401」说明 Token 过期/被撤销/不是 classic repo 权限。</p>
       </div>
       <p class="side-hint">💡 点选项作答，多选点提交；进度自动保存在本机。换设备/浏览器可「导出→导入」迁移进度。</p>
     </div>
@@ -533,13 +536,37 @@ async function _decryptObj(payload, password, saltStr){
   return JSON.parse(_dec.decode(pt));
 }
 function _cloudPath(user){ return 'progress/' + encodeURIComponent(user) + '.json'; }
+function _getCloudToken(){
+  let token = (document.getElementById('cloudToken').value || '').trim();
+  if(!token) token = localStorage.getItem('wuyou_gh_token') || '';
+  return token;
+}
+async function checkCloudToken(){
+  const token = _getCloudToken();
+  if(!token){ toast('请先填写 GitHub Token'); return; }
+  try{
+    const r = await fetch('https://api.github.com/user', { headers:{ Authorization:'Bearer '+token } });
+    if(r.status === 401){ toast('Token 无效或已过期（HTTP 401），请重新生成 classic Token'); return; }
+    if(r.status === 403){ toast('Token 无权限（HTTP 403），请确认勾选了 repo 权限'); return; }
+    if(!r.ok){ toast('Token 校验失败：HTTP '+r.status); return; }
+    const u = await r.json();
+    localStorage.setItem('wuyou_gh_token', token);
+    toast('Token 有效 ✓（'+u.login+'）');
+  }catch(e){ toast('校验出错：'+e.message); }
+}
 async function saveToCloud(){
   const pwd = document.getElementById('cloudPwd').value;
-  let token = (document.getElementById('cloudToken').value || '').trim();
+  const token = _getCloudToken();
   if(!pwd){ toast('请输入云端密码'); return; }
-  if(!token){ token = localStorage.getItem('wuyou_gh_token') || ''; }
   if(!token){ toast('请先填写 GitHub Token'); return; }
   localStorage.setItem('wuyou_gh_token', token);
+  toast('⏳ 校验 Token 并保存…');
+  try{
+    const check = await fetch('https://api.github.com/user', { headers:{ Authorization:'Bearer '+token } });
+    if(check.status === 401){ toast('保存失败：Token 无效或已过期（HTTP 401）'); return; }
+    if(check.status === 403){ toast('保存失败：Token 无 repo 权限（HTTP 403）'); return; }
+    if(!check.ok){ toast('保存失败：Token 校验 HTTP '+check.status); return; }
+  }catch(e){ toast('校验出错：'+e.message); return; }
   toast('⏳ 正在加密并保存…');
   const snapshot = { quizDone:state.quizDone, favs:[...state.favs], wrongIdx:[...state.wrongIdx], acc:state.acc, lastIndex:state.lastIndex };
   const enc = await _encryptObj(snapshot, pwd, state.user);
@@ -1349,6 +1376,7 @@ function importProgress(file){
 document.getElementById('btnExport').onclick = exportProgress;
 document.getElementById('btnCloudSave').onclick = saveToCloud;
 document.getElementById('btnCloudLoad').onclick = loadFromCloud;
+document.getElementById('btnCloudCheck').onclick = checkCloudToken;
 document.getElementById('cloudToken').value = localStorage.getItem('wuyou_gh_token') || '';
 document.getElementById('btnImport').onclick = () => document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change', e => {
