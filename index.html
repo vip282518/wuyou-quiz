@@ -1028,6 +1028,7 @@ function renderExam(){
       '<span class="qtype '+typeCls+'">'+q.type+'</span>'+
       '<span class="qdiff '+diffCls+'">'+q.difficulty+'</span>'+
       '<span class="qpoint">'+esc(q.point)+'</span>'+
+      '<span class="fav-btn exam-fav'+(state.favs.has(i)?' on':'')+'" data-examfav="'+i+'" title="收藏本题">'+((state.favs.has(i))?'★':'☆')+'</span>'+
     '</div>'+
     '<div class="exam-qtext">'+esc(q.question)+'</div>'+
     '<div class="exam-opts">'+optsHtml+'</div>'+
@@ -1065,6 +1066,19 @@ function renderExam(){
       renderExam();
     }
   };
+  // 模拟考试内收藏：写入共享收藏夹，与主程序「只看收藏」互通
+  const ef = document.querySelector('.exam-fav');
+  if(ef) ef.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    const idx = +ef.dataset.examfav;
+    const nowFav = !state.favs.has(idx);
+    if(nowFav){ state.favs.add(idx); toast('已收藏，可在「只看收藏」复习'); }
+    else { state.favs.delete(idx); toast('已取消收藏'); }
+    saveFavs();
+    ef.textContent = nowFav ? '★' : '☆';
+    ef.classList.toggle('on', nowFav);
+    document.getElementById('favCount').textContent = state.favs.size;
+  };
 }
 
 function nextExam(){
@@ -1092,8 +1106,12 @@ function doSubmitExam(){
     const c = byCat[q.category] || (byCat[q.category]={t:0,c:0});
     c.t++; if(ok) c.c++;
   });
-  // 模拟考试结果独立保存，不写回学习统计（不会覆盖已做对题为错、也不污染进度指针）
+  // 模拟考试结果独立保存，不写回「学习进度 quizDone / 正确率 acc」（不污染刷题记录与进度指针）
   exam.score = score; exam.wrongIdx = wrongIdx;
+  // 但错题并入「错题库」（仅写入错题本 state.wrongIdx，可与主程序「只看历史错题」互通复习）
+  let newWrongToBank = 0;
+  wrongIdx.forEach(idx=>{ if(!state.wrongIdx.has(idx)){ state.wrongIdx.add(idx); newWrongToBank++; } });
+  if(newWrongToBank){ saveWrongAcc(); updateStats(); }
   const pct = Math.round(score/EXAM_TOTAL*100);
   const verdict = pct>=90?'🏆 优秀！继续保持':pct>=80?'🥇 良好，再练练冲高分':pct>=60?'📚 及格，错题巩固一下':'💪 还需加强，先刷错题';
   const scoreColor = pct>=90?'var(--ok)':pct>=60?'var(--primary)':'var(--err)';
@@ -1120,7 +1138,7 @@ function doSubmitExam(){
     closeExam();
     state.wrongOnly=false; state.favOnly=false; state.randomPool = wrongIdx.length ? wrongIdx : null; state.randomAnswers = {}; state.page = 1;
     render();
-    toast(wrongIdx.length ? ('本次考试有 '+wrongIdx.length+' 道错题，已单独列出供复习（不计入学习统计）') : '本次考试全部答对，无错题 🎉');
+    toast(wrongIdx.length ? ('本次考试有 '+wrongIdx.length+' 道错题，已并入「错题库」并单独列出供复习') : '本次考试全部答对，无错题 🎉');
   };
   document.getElementById('exitExam').onclick=closeExam;
 }
