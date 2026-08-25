@@ -1105,13 +1105,17 @@ function doSubmitExam(){
     if(!ok) wrongIdx.push(i);
     const c = byCat[q.category] || (byCat[q.category]={t:0,c:0});
     c.t++; if(ok) c.c++;
+    // 模拟考试做过的题计入「已学习」与「正确率」（同一题重复出现只计一次，不重复计入）
+    if(!state.quizDone[i]){
+      state.quizDone[i] = { p: picked, ok };
+      state.acc.total++;
+      if(ok) state.acc.right++;
+    }
   });
-  // 模拟考试结果独立保存，不写回「学习进度 quizDone / 正确率 acc」（不污染刷题记录与进度指针）
   exam.score = score; exam.wrongIdx = wrongIdx;
-  // 但错题并入「错题库」（仅写入错题本 state.wrongIdx，可与主程序「只看历史错题」互通复习）
-  let newWrongToBank = 0;
-  wrongIdx.forEach(idx=>{ if(!state.wrongIdx.has(idx)){ state.wrongIdx.add(idx); newWrongToBank++; } });
-  if(newWrongToBank){ saveWrongAcc(); updateStats(); }
+  // 错题并入「错题库」（可与主程序「只看历史错题」互通复习）
+  wrongIdx.forEach(idx=>{ if(!state.wrongIdx.has(idx)){ state.wrongIdx.add(idx); } });
+  saveQuiz(); saveWrongAcc(); updateStats();
   const pct = Math.round(score/EXAM_TOTAL*100);
   const verdict = pct>=90?'🏆 优秀！继续保持':pct>=80?'🥇 良好，再练练冲高分':pct>=60?'📚 及格，错题巩固一下':'💪 还需加强，先刷错题';
   const scoreColor = pct>=90?'var(--ok)':pct>=60?'var(--primary)':'var(--err)';
@@ -1123,7 +1127,7 @@ function doSubmitExam(){
     '<div class="exam-result">'+
       '<div class="verdict">'+verdict+'</div>'+
       '<div class="score-big" style="color:'+scoreColor+'">'+score+'<span style="font-size:22px">/100</span></div>'+
-      '<div class="score-sub">正确率 '+pct+'% · 错题 '+(EXAM_TOTAL-score)+' 题 · 本次成绩独立记录，不影响学习进度</div>'+
+      '<div class="score-sub">正确率 '+pct+'% · 错题 '+(EXAM_TOTAL-score)+' 题 · 本次成绩已计入「已学习」与正确率</div>'+
       '<div class="mods">'+modsHtml+'</div>'+
       '<div class="btns">'+
         '<button class="action-btn primary" style="width:auto" id="retryExam">🔄 再考一次</button>'+
