@@ -8,10 +8,15 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#f5f6fa;--card:#ffffff;--line:#e8eaf2;--text:#1c2130;--sub:#6b7280;
-  --primary:#ff5a3c;--primary-d:#e64a2e;
+  --primary:#ff5a3c;--primary-d:#e64a2e;--primary-2:#ff7a4d;
   --ok:#16a34a;--err:#dc2626;--warn:#b45309;
   --c1:#ff6b5e;--c2:#4a7dff;--c3:#f5a623;--c4:#17b890;--c5:#8b5cf6;
-  --radius:14px;
+  --radius:16px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --sh-card:0 1px 3px rgba(28,33,48,.05),0 8px 24px rgba(28,33,48,.06);
+  --sh-lift:0 14px 38px rgba(28,33,48,.12),0 4px 12px rgba(255,90,60,.08);
+  --ring:0 0 0 4px rgba(255,90,60,.14);
 }
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:15px;line-height:1.65}
@@ -250,6 +255,94 @@ main{flex:1;min-width:0}
   .layout{flex-direction:column}
   .sidebar{position:static;width:100%;margin-right:0}
   .chapter-head{flex-wrap:wrap}
+}
+/* ============ 视觉升级层（玻璃质感 / 渐变光晕 / 弹簧动效）============ */
+html{background:#eef0f6}
+body{background:transparent}
+/* 动态渐变网格背景 */
+body::before{content:'';position:fixed;inset:-12%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(40% 38% at 12% 16%, rgba(255,90,60,.16), transparent 60%),
+    radial-gradient(38% 40% at 86% 10%, rgba(74,125,255,.16), transparent 60%),
+    radial-gradient(46% 46% at 80% 84%, rgba(139,92,246,.14), transparent 60%),
+    radial-gradient(40% 38% at 18% 86%, rgba(23,184,144,.12), transparent 60%);
+  background-color:#eef0f6;filter:saturate(1.05);
+  animation:meshDrift 26s ease-in-out infinite}
+@keyframes meshDrift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(2%,-2%,0) scale(1.08)}100%{transform:translate3d(0,0,0) scale(1)}}
+/* 玻璃顶栏 */
+.topbar{background:rgba(255,255,255,.72);backdrop-filter:blur(16px) saturate(170%);-webkit-backdrop-filter:blur(16px) saturate(170%);
+  border-bottom:1px solid rgba(232,234,242,.7);box-shadow:0 2px 22px rgba(28,33,48,.06)}
+.brand-logo{box-shadow:0 6px 18px rgba(255,90,60,.38)}
+.search-box input:focus{box-shadow:var(--ring)}
+/* 侧栏面板微浮雕 */
+.panel{box-shadow:var(--sh-card)}
+/* 分类/筛选高亮 */
+.cat-item.active{box-shadow:inset 0 0 0 1.5px var(--primary);background:linear-gradient(135deg,#fff4f0,#fff)}
+.fbtn.active{background:linear-gradient(135deg,var(--primary),var(--c3));border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(255,90,60,.28)}
+/* 卡片：悬浮抬升 + 渐变描边光晕 */
+.qcard{position:relative;transition:box-shadow .3s var(--ease),transform .3s var(--ease),border-color .2s}
+.qcard:hover{transform:translateY(-3px);box-shadow:var(--sh-lift);border-color:rgba(255,90,60,.25)}
+.qcard::after{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.4px;pointer-events:none;
+  background:linear-gradient(135deg, rgba(255,90,60,.55), rgba(74,125,255,.45) 45%, rgba(139,92,246,.4) 70%, transparent 85%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:0;transition:opacity .28s var(--ease)}
+.qcard:hover::after{opacity:1}
+.chapter-head{box-shadow:var(--sh-card);background:linear-gradient(135deg,#ffffff,#fbfcff)}
+/* 选项：弹簧式点选 + 悬浮微抬 + 一次性正确光晕/错误抖动 */
+.opts{gap:9px}
+.opt{transition:transform .22s var(--ease-spring),border-color .18s,background .18s,box-shadow .25s}
+.opt:hover{border-color:#b3bacb;background:#fafbfd;transform:translateY(-1px);box-shadow:0 4px 12px rgba(28,33,48,.05)}
+.opt:active{transform:scale(.985)}
+.opt.picked{box-shadow:0 6px 16px rgba(28,33,48,.10);border-color:var(--primary)}
+.opt.correct{box-shadow:0 0 0 1px rgba(22,163,74,.25)}
+.opt.just-correct{animation:correctPulse .65s var(--ease) both}
+.opt.just-wrong{animation:shakeX .5s var(--ease) both}
+@keyframes correctPulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.5)}70%{box-shadow:0 0 0 10px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+@keyframes shakeX{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-5px)}40%,60%{transform:translateX(5px)}}
+/* 按钮：按压回弹 + 高光扫过 */
+.action-btn,.reveal-btn,.load-more,.exam-submit,.exam-foot .nav-btn{transition:transform .15s var(--ease),box-shadow .2s,background .2s,border-color .2s}
+.action-btn:active,.reveal-btn:active,.load-more:active,.exam-submit:active,.exam-foot .nav-btn:active,.fav-btn:active{transform:scale(.96)}
+.action-btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 6px 18px rgba(255,90,60,.32)}
+.action-btn.primary:hover{box-shadow:0 10px 24px rgba(255,90,60,.42)}
+.reveal-btn{background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 4px 14px rgba(255,90,60,.3)}
+.load-more{background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 6px 18px rgba(255,90,60,.32)}
+.exam-submit{background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 6px 18px rgba(255,90,60,.32)}
+.action-btn.primary,.reveal-btn,.load-more,.exam-submit{position:relative;overflow:hidden}
+.action-btn.primary::after,.reveal-btn::after,.load-more::after,.exam-submit::after{content:'';position:absolute;top:0;left:-60%;width:45%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-18deg);transition:left .6s var(--ease);pointer-events:none}
+.action-btn.primary:hover::after,.reveal-btn:hover::after,.load-more:hover::after,.exam-submit:hover::after{left:130%}
+/* 进度条流光 */
+.progress-bar,.exam-head .progress .bar{background:#eceef4}
+.progress-bar i,.exam-head .progress .bar i{background:linear-gradient(90deg,var(--primary),var(--c2),var(--c5),var(--primary));background-size:200% 100%;animation:shimmer 2.4s linear infinite}
+@keyframes shimmer{0%{background-position:0% 0}100%{background-position:200% 0}}
+/* Toast：上浮 + 模糊 + 缩放 */
+.toast{transition:opacity .3s,transform .3s,filter .3s}
+.toast.show{animation:toastIn .42s var(--ease-spring) both}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(22px) scale(.94);filter:blur(5px)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1);filter:blur(0)}}
+/* 收藏星标弹跳 */
+.fav-btn.on{animation:starPop .42s var(--ease-spring) both}
+@keyframes starPop{0%{transform:scale(.5) rotate(-22deg)}60%{transform:scale(1.28) rotate(8deg)}100%{transform:scale(1)}}
+/* 模拟考试：题目淡入 + 选项弹簧 + 成绩数字弹入 */
+.exam-meta,.exam-qtext,.exam-opts{animation:qIn .34s var(--ease) both}
+@keyframes qIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.exam-opt{transition:transform .2s var(--ease),border-color .18s,background .18s,box-shadow .25s}
+.exam-opt:hover{border-color:#b3bacb;background:#fafbfd;transform:translateY(-1px);box-shadow:0 4px 12px rgba(28,33,48,.05)}
+.exam-opt.picked{box-shadow:0 6px 16px rgba(28,33,48,.10)}
+.exam-opt:active{transform:scale(.985)}
+.exam-result{padding-top:40px}
+.exam-result .score-big{animation:numPop .7s var(--ease-spring) both;background:linear-gradient(135deg,var(--primary),var(--c2),var(--c5));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+@keyframes numPop{0%{opacity:0;transform:translateY(16px) scale(.85)}60%{opacity:1;transform:translateY(0) scale(1.06)}100%{transform:scale(1)}}
+.exam-result .mod{animation:qIn .5s var(--ease) both}
+.exam-result .mods .mod:nth-child(1){animation-delay:.06s}
+.exam-result .mods .mod:nth-child(2){animation-delay:.12s}
+.exam-result .mods .mod:nth-child(3){animation-delay:.18s}
+.exam-result .mods .mod:nth-child(4){animation-delay:.24s}
+/* 思维导图弹层头部玻璃化 */
+.mm-head{backdrop-filter:blur(8px);background:rgba(255,255,255,.85)}
+/* 尊重「减少动态效果」系统偏好 */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  body::before{animation:none}
 }
 </style>
 </head>
@@ -849,6 +942,9 @@ function gradeSingle(i, picked){
     if(o.dataset.ans==='true') o.classList.add('correct');
     else if(o.dataset.opt===picked) o.classList.add('wrong');
   });
+  card.querySelectorAll('.opt.correct').forEach(o=>o.classList.add('just-correct'));
+  card.querySelectorAll('.opt.wrong').forEach(o=>o.classList.add('just-wrong'));
+  setTimeout(()=>card.querySelectorAll('.opt.just-correct,.opt.just-wrong').forEach(o=>{o.classList.remove('just-correct');o.classList.remove('just-wrong');}),650);
   const fb = card.querySelector('.quiz-feedback');
   const ok = q.answer.split('、').includes(picked);
   fb.className = 'quiz-feedback '+(ok?'ok':'no');
@@ -881,6 +977,9 @@ function gradeMulti(i){
     if(o.dataset.ans==='true') o.classList.add('correct');
     else if(o.classList.contains('picked')) o.classList.add('wrong');
   });
+  card.querySelectorAll('.opt.correct').forEach(o=>o.classList.add('just-correct'));
+  card.querySelectorAll('.opt.wrong').forEach(o=>o.classList.add('just-wrong'));
+  setTimeout(()=>card.querySelectorAll('.opt.just-correct,.opt.just-wrong').forEach(o=>{o.classList.remove('just-correct');o.classList.remove('just-wrong');}),650);
   const ok = picked.length===q.answer.split('、').length && q.answer.split('、').every(a=>picked.includes(a));
   const fb = card.querySelector('.quiz-feedback');
   fb.className = 'quiz-feedback '+(ok?'ok':'no');
